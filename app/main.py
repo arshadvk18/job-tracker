@@ -14,7 +14,7 @@ app = FastAPI(
 # CORS must be added BEFORE anything else
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:4200"],
+    allow_origins=["http://localhost:4200","https://jobtracker-ui.onrender.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

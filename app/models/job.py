@@ -18,6 +18,7 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # ← added
     title = Column(String, nullable=False)
     company = Column(String, nullable=False)
     location = Column(String, nullable=True)
@@ -26,6 +27,7 @@ class Job(Base):
     job_url = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    owner = relationship("User", back_populates="jobs")           # ← added
     applications = relationship(
         "Application",
         back_populates="job",

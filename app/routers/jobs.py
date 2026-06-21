@@ -16,7 +16,10 @@ def create_job(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    new_job = Job(**job_data.model_dump())
+    new_job = Job(
+        **job_data.model_dump(),
+        user_id=current_user.id       # ← link to logged in user
+    )
     db.add(new_job)
     db.commit()
     db.refresh(new_job)
@@ -28,7 +31,8 @@ def get_all_jobs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    return db.query(Job).all()
+    # ← only return this user's jobs
+    return db.query(Job).filter(Job.user_id == current_user.id).all()
 
 
 @router.get("/{job_id}", response_model=JobResponse)
@@ -37,7 +41,10 @@ def get_job(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    job = db.query(Job).filter(Job.id == job_id).first()
+    job = db.query(Job).filter(
+        Job.id == job_id,
+        Job.user_id == current_user.id    # ← only owner can access
+    ).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
@@ -50,7 +57,10 @@ def update_job(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    job = db.query(Job).filter(Job.id == job_id).first()
+    job = db.query(Job).filter(
+        Job.id == job_id,
+        Job.user_id == current_user.id
+    ).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -69,7 +79,10 @@ def delete_job(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    job = db.query(Job).filter(Job.id == job_id).first()
+    job = db.query(Job).filter(
+        Job.id == job_id,
+        Job.user_id == current_user.id
+    ).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     db.delete(job)

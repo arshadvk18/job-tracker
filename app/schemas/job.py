@@ -1,8 +1,7 @@
 from pydantic import BaseModel
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Any
 from app.models.job import ApplicationStatus
-from typing import Optional, List
 
 
 # --- Job Schemas ---
@@ -50,6 +49,15 @@ class ApplicationUpdate(BaseModel):
     notes: Optional[str] = None
 
 
+class ApplicationAnalysis(BaseModel):
+    match_score: int
+    matched_keywords: List[str]
+    missing_keywords: List[str]
+    experience_match: str
+    summary: str
+    interview_tips: List[str]
+
+
 class ApplicationResponse(BaseModel):
     id: int
     job_id: int
@@ -58,20 +66,26 @@ class ApplicationResponse(BaseModel):
     notes: Optional[str]
     applied_at: datetime
     updated_at: Optional[datetime]
-    job: JobResponse         # nested — returns full job details inside application
+    job: JobResponse
+    ai_analysis: Optional[Any] = None          # ← new: raw JSONB from DB
+    analyzed_at: Optional[datetime] = None     # ← new
 
     model_config = {"from_attributes": True}
 
-    # --- AI Schemas ---
+
+# --- AI Schemas ---
 
 class ResumeAnalysisRequest(BaseModel):
     resume_text: str
     job_description: str
+    application_id: Optional[int] = None       # ← new: if provided, saves result to DB
+
 
 class ResumeAnalysisResponse(BaseModel):
-    match_score: int                    # 0-100
-    matched_keywords: List[str]         # skills you have that match
-    missing_keywords: List[str]         # skills you're lacking
-    experience_match: str               # "Strong" / "Moderate" / "Weak"
-    summary: str                        # 2-3 line human readable summary
-    interview_tips: List[str]           # 3 tips specific to this JD
+    match_score: int
+    matched_keywords: List[str]
+    missing_keywords: List[str]
+    experience_match: str
+    summary: str
+    interview_tips: List[str]
+    saved_to_application: bool = False         # ← new: tells frontend if it was saved

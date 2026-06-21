@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import JSONB
 import enum
 from app.database import Base
 
@@ -18,7 +19,7 @@ class Job(Base):
     __tablename__ = "jobs"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)  # ← added
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     title = Column(String, nullable=False)
     company = Column(String, nullable=False)
     location = Column(String, nullable=True)
@@ -27,7 +28,7 @@ class Job(Base):
     job_url = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    owner = relationship("User", back_populates="jobs")           # ← added
+    owner = relationship("User", back_populates="jobs")
     applications = relationship(
         "Application",
         back_populates="job",
@@ -45,6 +46,8 @@ class Application(Base):
     notes = Column(Text, nullable=True)
     applied_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    ai_analysis = Column(JSONB, nullable=True)                              # ← new
+    analyzed_at = Column(DateTime(timezone=True), nullable=True)           # ← new
 
     user = relationship("User", back_populates="applications")
     job = relationship("Job", back_populates="applications")

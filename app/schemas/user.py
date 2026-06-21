@@ -5,7 +5,7 @@ from typing import Optional
 # --- Input schemas (what CLIENT sends to us) ---
 
 class UserCreate(BaseModel):
-    email: EmailStr          # auto-validates email format
+    email: EmailStr
     password: str
     full_name: Optional[str] = None
 
@@ -22,7 +22,7 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
 
-    model_config = {"from_attributes": True}  # lets Pydantic read SQLAlchemy objects
+    model_config = {"from_attributes": True}
 
 class Token(BaseModel):
     access_token: str
@@ -30,3 +30,15 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     email: Optional[str] = None
+
+# --- Resume schemas (new) ---
+
+class ResumeSave(BaseModel):
+    resume_text: str                    # plain text resume content
+
+class ResumeResponse(BaseModel):
+    resume_text: Optional[str]          # None if user hasn't saved one yet
+
+class PDFExtractResponse(BaseModel):
+    extracted_text: str                 # text pulled out of uploaded PDF
+    char_count: int                     # so frontend can show "X characters extracted"

@@ -63,3 +63,4 @@ uritemplate==4.2.0
 urllib3==2.7.0
 uvicorn==0.49.0
 websockets==16.0
+pdfplumber==0.11.4

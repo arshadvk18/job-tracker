@@ -1,15 +1,24 @@
 import json
+import base64
+import io
+from datetime import datetime, timezone
+
+import pdfplumber
 from google import genai
 from google.genai import types
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Body
+from sqlalchemy.orm import Session
+
 from app.config import settings
+from app.database import get_db
 from app.models.user import User
+from app.models.job import Application
 from app.auth_utils import get_current_user
 from app.schemas.job import ResumeAnalysisRequest, ResumeAnalysisResponse
+from app.schemas.user import PDFExtractResponse
 
 router = APIRouter(prefix="/ai", tags=["AI"])
 
-# New SDK — client based approach
 client = genai.Client(api_key=settings.gemini_api_key)
 GEMINI_MODEL = "gemini-2.5-flash-lite"
 
@@ -43,10 +52,65 @@ Return this exact JSON structure:
 """
 
 
+# --- PDF text extraction endpoint (new) ---
+
+@router.post("/extract-pdf", response_model=PDFExtractResponse)
+def extract_pdf(
+    payload: dict = Body(...),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Accepts { "pdf_base64": "<base64 string>" }
+    Returns extracted text from the PDF.
+    """
+    pdf_base64 = payload.get("pdf_base64", "")
+    if not pdf_base64:
+        raise HTTPException(status_code=400, detail="pdf_base64 field is required")
+
+    try:
+        # Strip data URI prefix if browser sends it (e.g. "data:application/pdf;base64,...")
+        if "," in pdf_base64:
+            pdf_base64 = pdf_base64.split(",", 1)[1]
+
+        pdf_bytes = base64.b64decode(pdf_base64)
+        pdf_file = io.BytesIO(pdf_bytes)
+
+        extracted_pages = []
+        with pdfplumber.open(pdf_file) as pdf:
+            for page in pdf.pages:
+                text = page.extract_text()
+                if text:
+                    extracted_pages.append(text.strip())
+
+        extracted_text = "\n\n".join(extracted_pages).strip()
+
+        if not extracted_text:
+            raise HTTPException(
+                status_code=422,
+                detail="Could not extract text from this PDF. It may be scanned or image-based. Please paste your resume as text instead."
+            )
+
+        return PDFExtractResponse(
+            extracted_text=extracted_text,
+            char_count=len(extracted_text)
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"PDF processing error: {str(e)}"
+        )
+
+
+# --- Resume analysis endpoint (extended) ---
+
 @router.post("/analyze-resume", response_model=ResumeAnalysisResponse)
 def analyze_resume(
     request: ResumeAnalysisRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     try:
         prompt = build_prompt(request.resume_text, request.job_description)
@@ -55,14 +119,14 @@ def analyze_resume(
             model=GEMINI_MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(
-                temperature=0.3,       # lower = more consistent/predictable output
+                temperature=0.3,
                 max_output_tokens=1000
             )
         )
 
         raw_text = response.text.strip()
 
-        # Strip markdown code blocks if Gemini adds them anyway
+        # Strip markdown code blocks if Gemini adds them
         if raw_text.startswith("```"):
             raw_text = raw_text.split("```")[1]
             if raw_text.startswith("json"):
@@ -72,7 +136,24 @@ def analyze_resume(
         parsed = json.loads(raw_text)
         parsed["match_score"] = max(0, min(100, int(parsed["match_score"])))
 
-        return ResumeAnalysisResponse(**parsed)
+        # Save to application if application_id was provided
+        saved = False
+        if request.application_id is not None:
+            application = db.query(Application).filter(
+                Application.id == request.application_id,
+                Application.user_id == current_user.id   # security: only own applications
+            ).first()
+
+            if application:
+                application.ai_analysis = parsed
+                application.analyzed_at = datetime.now(timezone.utc)
+                db.commit()
+                saved = True
+            # if application not found or doesn't belong to user — silently skip, don't error
+
+        result = ResumeAnalysisResponse(**parsed)
+        result.saved_to_application = saved
+        return result
 
     except json.JSONDecodeError:
         raise HTTPException(

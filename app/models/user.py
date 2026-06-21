@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -13,6 +13,7 @@ class User(Base):
     full_name = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    resume_text = Column(Text, nullable=True)          # ← new
 
-    jobs = relationship("Job", back_populates="owner")           # ← added
+    jobs = relationship("Job", back_populates="owner")
     applications = relationship("Application", back_populates="user")
